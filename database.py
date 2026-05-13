@@ -81,6 +81,16 @@ async def get_users_count() -> int:
         return row[0] if row else 0
 
 
+async def get_active_users_count() -> int:
+    """Number of users who have sent at least one question."""
+    async with _connect() as db:
+        cursor = await db.execute(
+            "SELECT COUNT(DISTINCT user_id) FROM questions"
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+
 # Questions
 
 async def create_question(

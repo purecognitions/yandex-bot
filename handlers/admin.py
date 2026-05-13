@@ -11,6 +11,7 @@ import texts
 from config import ADMIN_IDS, BROADCAST_DELAY
 from database import (
     answer_question,
+    get_active_users_count,
     get_all_user_ids,
     get_open_questions,
     get_question,
@@ -207,14 +208,21 @@ async def save_answer(message: Message, state: FSMContext, bot: Bot) -> None:
 # Stats
 
 @router.message(F.text == BTN_STATS)
+@router.message(Command("stats"))
 async def stats(message: Message) -> None:
     if not _is_admin(message.from_user.id):
         return
-    count = await get_users_count()
+
+    total = await get_users_count()
+    active = await get_active_users_count()
+    silent = max(total - active, 0)
     open_q = await get_open_questions()
+
     await message.answer(
-        f"📊 <b>Статистика</b>\n\n"
-        f"👥 Пользователей: <b>{count}</b>\n"
+        "📊 <b>Статистика</b>\n\n"
+        f"👥 Всего пользователей: <b>{total}</b>\n"
+        f"✍️ Написали в бот: <b>{active}</b>\n"
+        f"🤐 Не написали ни разу: <b>{silent}</b>\n"
         f"📩 Неотвеченных вопросов: <b>{len(open_q)}</b>",
         reply_markup=admin_keyboard(),
     )
