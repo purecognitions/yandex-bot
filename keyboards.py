@@ -94,8 +94,17 @@ def dm_recipients_kb(users: list[dict]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def trainings_list_kb(trainings) -> InlineKeyboardMarkup:
+    """Список тренингов на верхнем уровне (шаг 1)."""
+    rows = [
+        [InlineKeyboardButton(text=t.title, callback_data=f"tr_view_{t.id}")]
+        for t in trainings
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def groups_list_kb(training, counts: dict, user_group_id: str | None) -> InlineKeyboardMarkup:
-    """Список кнопок групп с счётчиками мест."""
+    """Список групп тренинга со счётчиками мест + кнопка возврата к списку тренингов."""
     rows = []
     for g in training.groups:
         c = counts.get(g.id, 0)
@@ -106,11 +115,13 @@ def groups_list_kb(training, counts: dict, user_group_id: str | None) -> InlineK
         marker = " ✅" if user_group_id == g.id else ""
         label = f"{g.title} · {seats}{marker}"
         rows.append([InlineKeyboardButton(text=label[:64], callback_data=f"tr_group_{g.id}")])
+    rows.append([InlineKeyboardButton(text="⬅️ К списку тренингов", callback_data="tr_picker")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def group_action_kb(
     group_id: str,
+    training_id: str,
     mode: str,
     other_group_id: str | None = None,
     is_admin: bool = False,
@@ -128,7 +139,7 @@ def group_action_kb(
             callback_data=f"tr_group_{other_group_id}",
         )])
     # для "full" дополнительных action-кнопок нет
-    rows.append([InlineKeyboardButton(text="⬅️ К группам", callback_data="tr_back_to_training")])
+    rows.append([InlineKeyboardButton(text="⬅️ К группам", callback_data=f"tr_view_{training_id}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

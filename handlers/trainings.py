@@ -27,9 +27,10 @@ from keyboards import (
     admin_signups_overview_kb,
     group_action_kb,
     groups_list_kb,
+    trainings_list_kb,
     user_keyboard,
 )
-from trainings_catalog import TRAININGS, active_trainings, get_group
+from trainings_catalog import TRAININGS, active_trainings, get_group, get_training
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -111,19 +112,35 @@ async def show_trainings(message: Message) -> None:
         await message.answer(texts.NO_TRAININGS, reply_markup=user_keyboard())
         return
 
-    # Сейчас тренинг один — показываем его сразу.
-    # Когда появятся несколько — заменить на список с выбором.
-    await _render_training(message, message.from_user.id, trainings[0], edit=False)
+    await message.answer(
+        texts.TRAININGS_PICKER_HEADER,
+        reply_markup=trainings_list_kb(trainings),
+    )
 
 
-@router.callback_query(F.data == "tr_back_to_training")
-async def back_to_training(callback: CallbackQuery) -> None:
+@router.callback_query(F.data == "tr_picker")
+async def back_to_picker(callback: CallbackQuery) -> None:
     trainings = active_trainings()
     if not trainings:
         await _safe_edit(callback.message, texts.NO_TRAININGS)
         await callback.answer()
         return
-    await _render_training(callback, callback.from_user.id, trainings[0], edit=True)
+    await _safe_edit(
+        callback.message,
+        texts.TRAININGS_PICKER_HEADER,
+        reply_markup=trainings_list_kb(trainings),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("tr_view_"))
+async def view_training(callback: CallbackQuery) -> None:
+    training_id = callback.data.removeprefix("tr_view_")
+    training = get_training(training_id)
+    if not training:
+        await callback.answer("Тренинг не найден", show_alert=True)
+        return
+    await _render_training(callback, callback.from_user.id, training, edit=True)
 
 
 # ---------- User: group view ----------
@@ -194,7 +211,13 @@ async def _render_group(callback: CallbackQuery, group_id: str) -> None:
             text_parts.append(texts.ADMIN_TEST_HINT)
             mode = "signup"
 
-    kb = group_action_kb(group_id, mode, other_group_id=other, is_admin=is_admin)
+    kb = group_action_kb(
+        group_id,
+        training.id,
+        mode,
+        other_group_id=other,
+        is_admin=is_admin,
+    )
     await _safe_edit(callback.message, "\n".join(text_parts), reply_markup=kb)
     await callback.answer()
 
