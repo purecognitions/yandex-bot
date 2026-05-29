@@ -34,6 +34,19 @@ async def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_questions_user ON questions(user_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_questions_status ON questions(status, created_at);
+            CREATE TABLE IF NOT EXISTS training_signups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                training_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                full_name TEXT,
+                created_at REAL,
+                UNIQUE(training_id, user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_signups_user
+                ON training_signups(user_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_signups_training
+                ON training_signups(training_id, created_at);
             """
         )
         await db.commit()
@@ -203,3 +216,67 @@ async def get_user_questions(user_id: int) -> list[dict]:
             (user_id, USER_QUESTIONS_LIMIT),
         )
         return [dict(row) for row in await cursor.fetchall()]
+
+
+# Training signups
+
+async def create_signup(
+    training_id: str,
+    user_id: int,
+    username: str,
+    full_name: str,
+) -> bool:
+    """Возвращает True если запись создана, False если уже существовала."""
+    async with _connect() as db:
+        try:
+            await db.execute(
+                "INSERT INTO training_signups "
+                "(training_id, user_id, username, full_name, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (training_id, user_id, username, full_name, time.time()),
+            )
+            await db.commit()
+            return True
+        except aiosqlite.IntegrityError:
+            return False
+
+
+async def delete_signup(training_id: str, user_id: int) -> bool:
+    """Возвращает True если запись была и удалена, False если не было."""
+    async with _connect() as db:
+        cursor = await db.execute(
+            "DELETE FROM training_signups WHERE training_id = ? AND user_id = ?",
+            (training_id, user_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def get_user_signups(user_id: int) -> list[dict]:
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM training_signups WHERE user_id = ? "
+            "ORDER BY created_at DESC",
+            (user_id,),
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_training_signups(training_id: str) -> list[dict]:
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM training_signups WHERE training_id = ? "
+            "ORDER BY created_at ASC",
+            (training_id,),
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def count_signups_by_training() -> dict[str, int]:
+    async with _connect() as db:
+        cursor = await db.execute(
+            "SELECT training_id, COUNT(*) FROM training_signups GROUP BY training_id"
+        )
+        return {row[0]: row[1] for row in await cursor.fetchall()}

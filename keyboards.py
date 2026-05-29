@@ -9,17 +9,21 @@ from config import ADMIN_IDS
 
 BTN_ASK = "✉️ Задать вопрос специалисту"
 BTN_MY_QUESTIONS = "📋 Мои вопросы"
+BTN_TRAININGS = "🎓 Тренинги"
+BTN_MY_SIGNUPS = "📅 Мои записи"
 BTN_BROADCAST = "📢 Рассылка"
 BTN_DM = "✉️ Написать пользователю"
 BTN_INBOX = "📨 Входящие вопросы"
 BTN_STATS = "📊 Статистика"
 BTN_EXPORT = "📥 Экспорт логинов"
+BTN_ADMIN_SIGNUPS = "🎓 Записи на тренинги"
 
 
 def user_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=BTN_ASK)],
+            [KeyboardButton(text=BTN_TRAININGS), KeyboardButton(text=BTN_MY_SIGNUPS)],
             [KeyboardButton(text=BTN_MY_QUESTIONS)],
         ],
         resize_keyboard=True,
@@ -30,8 +34,8 @@ def admin_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=BTN_BROADCAST), KeyboardButton(text=BTN_DM)],
-            [KeyboardButton(text=BTN_INBOX), KeyboardButton(text=BTN_STATS)],
-            [KeyboardButton(text=BTN_EXPORT)],
+            [KeyboardButton(text=BTN_INBOX), KeyboardButton(text=BTN_ADMIN_SIGNUPS)],
+            [KeyboardButton(text=BTN_STATS), KeyboardButton(text=BTN_EXPORT)],
         ],
         resize_keyboard=True,
     )
@@ -87,6 +91,31 @@ def dm_recipients_kb(users: list[dict]) -> InlineKeyboardMarkup:
         )[:48]
         rows.append([InlineKeyboardButton(text=label, callback_data=f"dm_pick_{u['user_id']}")])
     rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def trainings_list_kb(trainings) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=t.title, callback_data=f"tr_view_{t.id}")]
+        for t in trainings
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def training_signup_kb(training_id: str, is_signed_up: bool) -> InlineKeyboardMarkup:
+    if is_signed_up:
+        rows = [[InlineKeyboardButton(text="❌ Отменить запись", callback_data=f"tr_cancel_{training_id}")]]
+    else:
+        rows = [[InlineKeyboardButton(text="📝 Записаться", callback_data=f"tr_signup_{training_id}")]]
+    rows.append([InlineKeyboardButton(text="⬅️ К списку", callback_data="tr_list")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_trainings_overview_kb(trainings) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=f"📋 {t.title}", callback_data=f"tr_admin_{t.id}")]
+        for t in trainings
+    ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

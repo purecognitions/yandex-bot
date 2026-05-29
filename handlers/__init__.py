@@ -1,11 +1,12 @@
 from aiogram import Router
 
-from . import admin, common, user
+from . import admin, common, trainings, user
 
 
 def build_router() -> Router:
     router = Router()
     router.include_router(common.router)
     router.include_router(user.router)
+    router.include_router(trainings.router)
     router.include_router(admin.router)
     return router
