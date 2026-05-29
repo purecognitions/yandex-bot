@@ -17,3 +17,9 @@ class AskStates(StatesGroup):
 
 class AnswerStates(StatesGroup):
     waiting_for_answer = State()
+
+
+class DirectMessageStates(StatesGroup):
+    waiting_for_recipient = State()
+    waiting_for_content = State()
+    confirm = State()

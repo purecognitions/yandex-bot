@@ -1,33 +1,44 @@
 import asyncio
+import csv
+import io
 import logging
 from datetime import datetime
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramForbiddenError
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 import texts
 from config import ADMIN_IDS, BROADCAST_DELAY
 from database import (
     answer_question,
+    find_user_by_username,
     get_active_users_count,
     get_all_user_ids,
+    get_all_users,
     get_open_questions,
     get_question,
+    get_recent_users,
+    get_user,
     get_users_count,
     set_question_in_progress,
 )
 from keyboards import (
     BTN_BROADCAST,
+    BTN_DM,
+    BTN_EXPORT,
     BTN_INBOX,
     BTN_STATS,
     admin_keyboard,
     broadcast_confirm_kb,
     cancel_kb,
+    dm_confirm_kb,
+    dm_recipients_kb,
     reply_kb,
 )
-from states import AnswerStates, BroadcastStates
+from states import AnswerStates, BroadcastStates, DirectMessageStates
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -73,7 +84,7 @@ async def broadcast_preview(message: Message, state: FSMContext) -> None:
     )
 
 
-async def _send_broadcast_message(bot: Bot, uid: int, data: dict) -> None:
+async def _send_message_payload(bot: Bot, uid: int, data: dict) -> None:
     text = data.get("text")
     if data.get("photo_id"):
         await bot.send_photo(uid, data["photo_id"], caption=text)
@@ -94,7 +105,7 @@ async def broadcast_execute(callback: CallbackQuery, state: FSMContext, bot: Bot
     success = failed = 0
     for uid in await get_all_user_ids():
         try:
-            await _send_broadcast_message(bot, uid, data)
+            await _send_message_payload(bot, uid, data)
             success += 1
         except Exception as exc:
             failed += 1
@@ -107,6 +118,116 @@ async def broadcast_execute(callback: CallbackQuery, state: FSMContext, bot: Bot
         f"• Не доставлено: <b>{failed}</b>",
         reply_markup=admin_keyboard(),
     )
+
+
+# Direct message to one user
+
+def _format_user(u: dict) -> str:
+    handle = f"@{u['username']}" if u.get("username") else (u.get("full_name") or "—")
+    return f"{handle} (id {u['user_id']})"
+
+
+async def _resolve_recipient(query: str) -> dict | None:
+    query = query.strip()
+    if not query:
+        return None
+    if query.lstrip("-").isdigit():
+        return await get_user(int(query))
+    return await find_user_by_username(query)
+
+
+@router.message(F.text == BTN_DM)
+@router.message(Command("dm"))
+async def dm_start(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        await message.answer(texts.ACCESS_DENIED)
+        return
+
+    recent = await get_recent_users(20)
+    await state.set_state(DirectMessageStates.waiting_for_recipient)
+    await message.answer(texts.DM_START, reply_markup=dm_recipients_kb(recent))
+
+
+@router.callback_query(F.data.startswith("dm_pick_"), DirectMessageStates.waiting_for_recipient)
+async def dm_pick_from_list(callback: CallbackQuery, state: FSMContext) -> None:
+    user_id = int(callback.data.split("_", 2)[2])
+    recipient = await get_user(user_id)
+    if not recipient:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
+    label = _format_user(recipient)
+    await state.update_data(recipient_id=recipient["user_id"], recipient_label=label)
+    await state.set_state(DirectMessageStates.waiting_for_content)
+    await callback.message.edit_text(
+        f"👤 Получатель: <b>{label}</b>\n\n{texts.DM_ASK_CONTENT}"
+    )
+    await callback.answer()
+
+
+@router.message(DirectMessageStates.waiting_for_recipient, F.text)
+async def dm_recipient_by_text(message: Message, state: FSMContext) -> None:
+    recipient = await _resolve_recipient(message.text)
+    if not recipient:
+        await message.answer(texts.DM_RECIPIENT_NOT_FOUND)
+        return
+
+    label = _format_user(recipient)
+    await state.update_data(recipient_id=recipient["user_id"], recipient_label=label)
+    await state.set_state(DirectMessageStates.waiting_for_content)
+    await message.answer(
+        f"👤 Получатель: <b>{label}</b>\n\n{texts.DM_ASK_CONTENT}",
+        reply_markup=cancel_kb(),
+    )
+
+
+@router.message(DirectMessageStates.waiting_for_content)
+async def dm_preview(message: Message, state: FSMContext) -> None:
+    if not (message.text or message.caption or message.photo or message.video or message.document):
+        await message.answer(texts.DM_UNSUPPORTED_CONTENT)
+        return
+
+    await state.update_data(
+        text=message.text or message.caption,
+        photo_id=message.photo[-1].file_id if message.photo else None,
+        video_id=message.video.file_id if message.video else None,
+        document_id=message.document.file_id if message.document else None,
+    )
+
+    data = await state.get_data()
+    await state.set_state(DirectMessageStates.confirm)
+    await message.answer(
+        f"👆 Отправить это сообщение пользователю <b>{data['recipient_label']}</b>?",
+        reply_markup=dm_confirm_kb(),
+    )
+
+
+@router.callback_query(F.data == "dm_confirm", DirectMessageStates.confirm)
+async def dm_send(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    await state.clear()
+    uid = data["recipient_id"]
+    label = data["recipient_label"]
+
+    try:
+        await _send_message_payload(bot, uid, data)
+    except TelegramForbiddenError:
+        await callback.message.edit_text(texts.DM_BLOCKED.format(label=f"<b>{label}</b>"))
+        await callback.message.answer("Готов к следующему действию.", reply_markup=admin_keyboard())
+        await callback.answer()
+        return
+    except Exception as exc:
+        logger.exception("DM send failed to %s", uid)
+        await callback.message.edit_text(
+            f"⚠️ Ошибка при отправке пользователю <b>{label}</b>:\n<code>{exc}</code>"
+        )
+        await callback.message.answer("Готов к следующему действию.", reply_markup=admin_keyboard())
+        await callback.answer()
+        return
+
+    await callback.message.edit_text(f"✅ Сообщение отправлено пользователю <b>{label}</b>.")
+    await callback.message.answer("Готов к следующему действию.", reply_markup=admin_keyboard())
+    await callback.answer()
 
 
 # Inbox & answers
@@ -224,5 +345,62 @@ async def stats(message: Message) -> None:
         f"✍️ Написали в бот: <b>{active}</b>\n"
         f"🤐 Не написали ни разу: <b>{silent}</b>\n"
         f"📩 Неотвеченных вопросов: <b>{len(open_q)}</b>",
+        reply_markup=admin_keyboard(),
+    )
+
+
+# Export
+
+def _build_users_csv(users: list[dict]) -> bytes:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";")
+    writer.writerow(
+        ["user_id", "username", "telegram_link", "full_name", "authorized", "joined_at"]
+    )
+    for u in users:
+        username = u["username"] or ""
+        link = (
+            f"https://t.me/{username}"
+            if username
+            else f"tg://user?id={u['user_id']}"
+        )
+        joined = (
+            datetime.fromtimestamp(u["joined_at"]).strftime("%Y-%m-%d %H:%M")
+            if u["joined_at"]
+            else ""
+        )
+        writer.writerow(
+            [
+                u["user_id"],
+                f"@{username}" if username else "",
+                link,
+                u["full_name"] or "",
+                "да" if u["is_authorized"] else "нет",
+                joined,
+            ]
+        )
+    # utf-8-sig — чтобы Excel корректно открыл кириллицу
+    return buffer.getvalue().encode("utf-8-sig")
+
+
+@router.message(F.text == BTN_EXPORT)
+@router.message(Command("export"))
+async def export_users(message: Message) -> None:
+    if not _is_admin(message.from_user.id):
+        await message.answer(texts.ACCESS_DENIED)
+        return
+
+    users = await get_all_users()
+    if not users:
+        await message.answer(
+            "В базе пока нет пользователей.", reply_markup=admin_keyboard()
+        )
+        return
+
+    data = _build_users_csv(users)
+    filename = f"participants_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+    await message.answer_document(
+        BufferedInputFile(data, filename=filename),
+        caption=f"📥 Экспорт участников: <b>{len(users)}</b> чел.",
         reply_markup=admin_keyboard(),
     )

@@ -91,6 +91,48 @@ async def get_active_users_count() -> int:
         return row[0] if row else 0
 
 
+async def get_all_users() -> list[dict]:
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT user_id, username, full_name, is_authorized, joined_at "
+            "FROM users ORDER BY joined_at"
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_user(user_id: int) -> dict | None:
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM users WHERE user_id = ?", (user_id,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def find_user_by_username(username: str) -> dict | None:
+    username = username.lstrip("@").strip().lower()
+    if not username:
+        return None
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM users WHERE LOWER(username) = ?", (username,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def get_recent_users(limit: int = 20) -> list[dict]:
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM users ORDER BY joined_at DESC LIMIT ?", (limit,)
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
 # Questions
 
 async def create_question(
