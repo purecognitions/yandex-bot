@@ -115,7 +115,7 @@ class TrainingGroup:
     leader: str           # "Аня Бондаренко" (без эмодзи — добавим при рендере)
     duration_minutes: int = 120
     total_meetings: int = 6
-    capacity: int = 15
+    capacity: int = 16
     meeting_url: str = ""  # ссылка на Zoom/Meet — попадает в напоминания
 
 
