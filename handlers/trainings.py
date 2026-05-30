@@ -30,7 +30,14 @@ from keyboards import (
     trainings_list_kb,
     user_keyboard,
 )
-from trainings_catalog import TRAININGS, active_trainings, get_group, get_training
+from trainings_catalog import (
+    TRAININGS,
+    active_trainings,
+    format_group_text,
+    format_training_full_text,
+    get_group,
+    get_training,
+)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -86,7 +93,7 @@ async def _render_training(target, user_id: int, training, *, edit: bool) -> Non
     user_signup = _user_signup_in_training(signups, group_ids)
     user_group_id = user_signup["training_id"] if user_signup else None
 
-    text = f"<b>{training.title}</b>\n\n{training.description}"
+    text = f"<b>{training.title}</b>\n\n{format_training_full_text(training)}"
     if user_group_id:
         pair = get_group(user_group_id)
         if pair:
@@ -162,10 +169,7 @@ async def _render_group(callback: CallbackQuery, group_id: str) -> None:
     seats_left = group.capacity - count
 
     text_parts = [
-        f"<b>{group.title}</b>",
-        "",
-        group.schedule,
-        group.leader,
+        format_group_text(group),
         "",
         f"📊 Занято: <b>{count} / {group.capacity}</b>",
     ]
@@ -367,6 +371,26 @@ async def admin_overview(message: Message) -> None:
         "\n".join(lines).strip(),
         reply_markup=admin_signups_overview_kb(TRAININGS),
     )
+
+
+@router.message(Command("test_reminders"))
+async def admin_test_reminders(message: Message) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    from scheduler import REMINDER_1H, REMINDER_24H, build_reminder_preview
+
+    await message.answer(
+        "🧪 <b>Превью напоминаний для всех групп</b>\n"
+        "<i>(только текст — реальные напоминания пойдут по расписанию)</i>"
+    )
+    for training in active_trainings():
+        for group in training.groups:
+            for kind, label in ((REMINDER_24H, "24h"), (REMINDER_1H, "1h")):
+                preview = (
+                    f"<i>↓ {label} · {group.title}</i>\n\n"
+                    + build_reminder_preview(training, group, kind)
+                )
+                await message.answer(preview)
 
 
 @router.callback_query(F.data.startswith("tr_admin_"))

@@ -47,6 +47,12 @@ async def init_db() -> None:
                 ON training_signups(user_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_signups_training
                 ON training_signups(training_id, created_at);
+            CREATE TABLE IF NOT EXISTS reminders_sent (
+                group_id TEXT NOT NULL,
+                reminder_type TEXT NOT NULL,
+                sent_at REAL,
+                PRIMARY KEY (group_id, reminder_type)
+            );
             """
         )
 
@@ -364,6 +370,27 @@ async def get_group_signups(group_id: str, include_admin: bool = True) -> list[d
                 (group_id,),
             )
         return [dict(row) for row in await cursor.fetchall()]
+
+
+# Reminders
+
+async def is_reminder_sent(group_id: str, reminder_type: str) -> bool:
+    async with _connect() as db:
+        cursor = await db.execute(
+            "SELECT 1 FROM reminders_sent WHERE group_id = ? AND reminder_type = ?",
+            (group_id, reminder_type),
+        )
+        return await cursor.fetchone() is not None
+
+
+async def mark_reminder_sent(group_id: str, reminder_type: str) -> None:
+    async with _connect() as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO reminders_sent "
+            "(group_id, reminder_type, sent_at) VALUES (?, ?, ?)",
+            (group_id, reminder_type, time.time()),
+        )
+        await db.commit()
 
 
 async def count_active_signups_for_groups(group_ids: list[str]) -> dict[str, int]:

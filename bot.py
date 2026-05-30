@@ -8,6 +8,7 @@ from aiogram.enums import ParseMode
 from config import BOT_TOKEN
 from database import init_db
 from handlers import build_router
+from scheduler import reminder_loop
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,10 +24,17 @@ async def main() -> None:
     dp = Dispatcher()
     dp.include_router(build_router())
 
+    reminder_task = asyncio.create_task(reminder_loop(bot))
+
     logger.info("Бот запущен")
     try:
         await dp.start_polling(bot)
     finally:
+        reminder_task.cancel()
+        try:
+            await reminder_task
+        except asyncio.CancelledError:
+            pass
         await bot.session.close()
 
 
