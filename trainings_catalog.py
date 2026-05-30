@@ -99,6 +99,12 @@ def format_group_when_short(g) -> str:
     )
 
 
+def format_seats_free(n: int) -> str:
+    """'1 место свободно' / '3 места свободно' / '14 мест свободно'."""
+    word = _plural(n, "место", "места", "мест")
+    return f"{n} {word} свободно"
+
+
 # ---------- Модель ----------
 
 @dataclass(frozen=True)

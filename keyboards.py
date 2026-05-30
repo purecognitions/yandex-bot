@@ -107,13 +107,15 @@ def trainings_list_kb(trainings) -> InlineKeyboardMarkup:
 
 def groups_list_kb(training, counts: dict, user_group_id: str | None) -> InlineKeyboardMarkup:
     """Список групп тренинга со счётчиками мест + кнопка возврата к списку тренингов."""
+    from trainings_catalog import format_seats_free
+
     rows = []
     for g in training.groups:
         c = counts.get(g.id, 0)
         if c >= g.capacity:
             seats = "🚫 нет мест"
         else:
-            seats = f"{g.capacity - c} мест свободно"
+            seats = format_seats_free(g.capacity - c)
         marker = " ✅" if user_group_id == g.id else ""
         label = f"{g.title} · {seats}{marker}"
         rows.append([InlineKeyboardButton(text=label[:64], callback_data=f"tr_group_{g.id}")])
