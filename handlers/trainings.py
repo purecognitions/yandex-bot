@@ -1,10 +1,12 @@
+import csv
+import io
 import logging
 from datetime import datetime
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 import texts
 from config import ADMIN_IDS
@@ -16,14 +18,17 @@ from database import (
     count_active_signups_for_groups,
     create_signup,
     delete_signup,
+    get_all_signups,
     get_group_signups,
     get_user_signups,
     is_user_authorized,
 )
 from keyboards import (
     BTN_ADMIN_SIGNUPS,
+    BTN_EXPORT_SIGNUPS,
     BTN_MY_SIGNUPS,
     BTN_TRAININGS,
+    admin_keyboard,
     admin_signups_overview_kb,
     group_action_kb,
     groups_list_kb,
@@ -31,12 +36,15 @@ from keyboards import (
     user_keyboard,
 )
 from trainings_catalog import (
+    MSK,
     TRAININGS,
     active_trainings,
     format_group_text,
+    format_group_when_short,
     format_training_full_text,
     get_group,
     get_training,
+    time_until_label,
 )
 
 logger = logging.getLogger(__name__)
@@ -184,6 +192,9 @@ async def _render_group(callback: CallbackQuery, group_id: str) -> None:
     if user_signup and user_signup["training_id"] == group_id:
         text_parts.append("")
         text_parts.append("✅ <b>Вы записаны в эту группу.</b>")
+        text_parts.append(
+            "⏰ Напоминания придут за сутки и за час до старта."
+        )
         mode, other = "cancel", None
     elif user_signup:
         other_pair = get_group(user_signup["training_id"])
@@ -328,20 +339,28 @@ async def my_signups(message: Message) -> None:
         await message.answer(texts.NO_USER_SIGNUPS, reply_markup=user_keyboard())
         return
 
+    now = datetime.now(MSK)
     lines = []
     for s in signups:
         pair = get_group(s["training_id"])
+        marker = " <i>(тест)</i>" if s["is_admin"] else ""
         if pair:
             t, g = pair
-            title = f"{t.title}\n  └ {g.title}"
+            block = [
+                f"• {t.title}{marker}",
+                f"  └ {g.title}",
+                f"  {format_group_when_short(g)} — <i>{time_until_label(g.starts_at, now)}</i>",
+            ]
+            if g.meeting_url:
+                block.append(f"  🔗 {g.meeting_url}")
         else:
-            title = f"<i>группа «{s['training_id']}» (снята с публикации)</i>"
-        marker = " <i>(тест)</i>" if s["is_admin"] else ""
-        dt = datetime.fromtimestamp(s["created_at"]).strftime("%d.%m %H:%M")
-        lines.append(f"• {title}{marker}\n  📅 записан: {dt}")
+            block = [
+                f"• <i>группа «{s['training_id']}» (снята с публикации){marker}</i>"
+            ]
+        lines.append("\n".join(block))
 
     await message.answer(
-        "📅 <b>Ваши записи:</b>\n\n" + "\n\n".join(lines),
+        "📅 <b>Ваши записи на тренинги:</b>\n\n" + "\n\n".join(lines),
         reply_markup=user_keyboard(),
     )
 
@@ -441,3 +460,86 @@ async def admin_show_group_signups(callback: CallbackQuery) -> None:
         disable_web_page_preview=True,
     )
     await callback.answer()
+
+
+# ---------- Admin: CSV export of signups ----------
+
+def _build_signups_csv(rows: list[dict]) -> bytes:
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=";")
+    writer.writerow([
+        "training_title",
+        "training_id",
+        "group_title",
+        "group_id",
+        "group_starts_at_msk",
+        "user_id",
+        "telegram_link",
+        "username",
+        "full_name",
+        "is_admin_test",
+        "signed_up_at",
+    ])
+    for s in rows:
+        pair = get_group(s["training_id"])
+        if pair:
+            t, g = pair
+            training_title = t.title
+            training_id = t.id
+            group_title = g.title
+            group_starts = g.starts_at.strftime("%Y-%m-%d %H:%M MSK")
+        else:
+            training_title = ""
+            training_id = ""
+            group_title = "<снят с публикации>"
+            group_starts = ""
+        username = s.get("username") or ""
+        link = (
+            f"https://t.me/{username}"
+            if username
+            else f"tg://user?id={s['user_id']}"
+        )
+        signed_up = datetime.fromtimestamp(s["created_at"]).strftime("%Y-%m-%d %H:%M")
+        writer.writerow([
+            training_title,
+            training_id,
+            group_title,
+            s["training_id"],  # это group_id
+            group_starts,
+            s["user_id"],
+            link,
+            f"@{username}" if username else "",
+            s.get("full_name") or "",
+            "да" if s.get("is_admin") else "нет",
+            signed_up,
+        ])
+    return buf.getvalue().encode("utf-8-sig")
+
+
+@router.message(F.text == BTN_EXPORT_SIGNUPS)
+@router.message(Command("export_signups"))
+async def admin_export_signups(message: Message) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+
+    signups = await get_all_signups()
+    if not signups:
+        await message.answer(
+            "Записей пока нет — выгружать нечего.",
+            reply_markup=admin_keyboard(),
+        )
+        return
+
+    data = _build_signups_csv(signups)
+    filename = f"signups_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+    real = sum(1 for s in signups if not s.get("is_admin"))
+    test = len(signups) - real
+    caption = (
+        f"📥 Экспорт записей: <b>{len(signups)}</b> строк "
+        f"({real} реальных + {test} тест-записей)."
+    )
+    await message.answer_document(
+        BufferedInputFile(data, filename=filename),
+        caption=caption,
+        reply_markup=admin_keyboard(),
+    )

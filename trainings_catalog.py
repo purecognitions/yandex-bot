@@ -65,6 +65,40 @@ def _format_time(dt: datetime) -> str:
     return dt.strftime("%H:%M")
 
 
+def _plural(n: int, one: str, few: str, many: str) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return one
+    if 2 <= n % 10 <= 4 and not (12 <= n % 100 <= 14):
+        return few
+    return many
+
+
+def time_until_label(starts_at: datetime, now: datetime) -> str:
+    """'через 3 дня', 'через 5 часов', 'через 12 минут', 'уже началось'."""
+    delta = starts_at - now
+    total_sec = int(delta.total_seconds())
+    if total_sec <= 0:
+        # Тренинг идёт или уже закончился
+        return "уже идёт или прошёл"
+    days = total_sec // 86400
+    if days >= 1:
+        return f"через {days} {_plural(days, 'день', 'дня', 'дней')}"
+    hours = total_sec // 3600
+    if hours >= 1:
+        return f"через {hours} {_plural(hours, 'час', 'часа', 'часов')}"
+    minutes = max(total_sec // 60, 1)
+    return f"через {minutes} {_plural(minutes, 'минуту', 'минуты', 'минут')}"
+
+
+def format_group_when_short(g) -> str:
+    """Короткое 'Старт: 3 июня (среда) в 15:00 МСК' — для списка записей."""
+    weekday = _WEEKDAY_NOM[g.starts_at.weekday()]
+    return (
+        f"Старт: {_format_date(g.starts_at)} ({weekday}) "
+        f"в {_format_time(g.starts_at)} МСК"
+    )
+
+
 # ---------- Модель ----------
 
 @dataclass(frozen=True)

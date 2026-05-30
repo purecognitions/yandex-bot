@@ -354,6 +354,17 @@ async def get_user_signups(user_id: int) -> list[dict]:
         return [dict(row) for row in await cursor.fetchall()]
 
 
+async def get_all_signups() -> list[dict]:
+    """Все записи во всех группах, отсортированные по group_id, потом по времени."""
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM training_signups "
+            "ORDER BY training_id ASC, created_at ASC"
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
 async def get_group_signups(group_id: str, include_admin: bool = True) -> list[dict]:
     async with _connect() as db:
         db.row_factory = aiosqlite.Row

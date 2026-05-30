@@ -16,6 +16,7 @@ BTN_DM = "✉️ Написать пользователю"
 BTN_INBOX = "📨 Входящие вопросы"
 BTN_STATS = "📊 Статистика"
 BTN_EXPORT = "📥 Экспорт логинов"
+BTN_EXPORT_SIGNUPS = "📥 Экспорт записей"
 BTN_ADMIN_SIGNUPS = "🎓 Записи на тренинги"
 
 
@@ -35,7 +36,8 @@ def admin_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=BTN_BROADCAST), KeyboardButton(text=BTN_DM)],
             [KeyboardButton(text=BTN_INBOX), KeyboardButton(text=BTN_ADMIN_SIGNUPS)],
-            [KeyboardButton(text=BTN_STATS), KeyboardButton(text=BTN_EXPORT)],
+            [KeyboardButton(text=BTN_STATS)],
+            [KeyboardButton(text=BTN_EXPORT), KeyboardButton(text=BTN_EXPORT_SIGNUPS)],
         ],
         resize_keyboard=True,
     )
