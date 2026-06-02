@@ -2,6 +2,7 @@ import asyncio
 import csv
 import io
 import logging
+import re
 from datetime import datetime
 
 from aiogram import Bot, F, Router
@@ -69,8 +70,10 @@ async def broadcast_start(message: Message, state: FSMContext) -> None:
 
 @router.message(BroadcastStates.waiting_for_content)
 async def broadcast_preview(message: Message, state: FSMContext) -> None:
+    raw_text = message.html_text or message.caption
+    clean_text = _strip_custom_emoji(raw_text) if raw_text else None
     await state.update_data(
-        text=message.text or message.caption,
+        text=clean_text,
         photo_id=message.photo[-1].file_id if message.photo else None,
         video_id=message.video.file_id if message.video else None,
         document_id=message.document.file_id if message.document else None,
@@ -82,6 +85,11 @@ async def broadcast_preview(message: Message, state: FSMContext) -> None:
         f"👆 Вот ваше сообщение. Отправить его <b>{count}</b> пользователям?",
         reply_markup=broadcast_confirm_kb(),
     )
+
+
+def _strip_custom_emoji(html: str) -> str:
+    """Replace <tg-emoji ...>fallback</tg-emoji> with plain fallback character."""
+    return re.sub(r"<tg-emoji[^>]*>([^<]*)</tg-emoji>", r"\1", html)
 
 
 async def _send_message_payload(bot: Bot, uid: int, data: dict) -> None:
@@ -187,8 +195,10 @@ async def dm_preview(message: Message, state: FSMContext) -> None:
         await message.answer(texts.DM_UNSUPPORTED_CONTENT)
         return
 
+    raw_text = message.html_text or message.caption
+    clean_text = _strip_custom_emoji(raw_text) if raw_text else None
     await state.update_data(
-        text=message.text or message.caption,
+        text=clean_text,
         photo_id=message.photo[-1].file_id if message.photo else None,
         video_id=message.video.file_id if message.video else None,
         document_id=message.document.file_id if message.document else None,
