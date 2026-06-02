@@ -215,7 +215,7 @@ TRAININGS: list[Training] = [
             TrainingGroup(
                 id="er_g1",
                 title="1️⃣ Группа 1",
-                starts_at=datetime(2026, 6, 3, 15, 0, tzinfo=MSK),
+                starts_at=datetime(2026, 6, 10, 15, 0, tzinfo=MSK),
                 leader="Аня Бондаренко",
             ),
             TrainingGroup(
