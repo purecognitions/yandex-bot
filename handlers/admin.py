@@ -92,9 +92,24 @@ def _strip_custom_emoji(html: str) -> str:
     return re.sub(r"<tg-emoji[^>]*>([^<]*)</tg-emoji>", r"\1", html)
 
 
+CAPTION_LIMIT = 1024
+
+
 async def _send_message_payload(bot: Bot, uid: int, data: dict) -> None:
     text = data.get("text")
-    if data.get("photo_id"):
+    media_id = data.get("photo_id") or data.get("video_id") or data.get("document_id")
+    caption_too_long = media_id and text and len(text) > CAPTION_LIMIT
+
+    if caption_too_long:
+        # Медиа без подписи, потом текст отдельным сообщением
+        if data.get("photo_id"):
+            await bot.send_photo(uid, data["photo_id"])
+        elif data.get("video_id"):
+            await bot.send_video(uid, data["video_id"])
+        else:
+            await bot.send_document(uid, data["document_id"])
+        await bot.send_message(uid, text)
+    elif data.get("photo_id"):
         await bot.send_photo(uid, data["photo_id"], caption=text)
     elif data.get("video_id"):
         await bot.send_video(uid, data["video_id"], caption=text)
