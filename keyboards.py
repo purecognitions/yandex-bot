@@ -151,11 +151,28 @@ def admin_signups_overview_kb(trainings) -> InlineKeyboardMarkup:
     rows = []
     for t in trainings:
         for g in t.groups:
-            rows.append([InlineKeyboardButton(
-                text=f"📋 {g.title} — список",
-                callback_data=f"tr_admin_{g.id}",
-            )])
+            rows.append([
+                InlineKeyboardButton(
+                    text=f"📋 {g.title} — список",
+                    callback_data=f"tr_admin_{g.id}",
+                ),
+                InlineKeyboardButton(
+                    text="✉️ Написать",
+                    callback_data=f"grpcast_{g.id}",
+                ),
+            ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def group_broadcast_confirm_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Отправить", callback_data="grpcast_confirm"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="cancel"),
+            ]
+        ]
+    )
 
 
 def reply_kb(question_id: int) -> InlineKeyboardMarkup:
