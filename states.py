@@ -23,3 +23,8 @@ class DirectMessageStates(StatesGroup):
     waiting_for_recipient = State()
     waiting_for_content = State()
     confirm = State()
+
+
+class GroupBroadcastStates(StatesGroup):
+    waiting_for_content = State()
+    confirm = State()

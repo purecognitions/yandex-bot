@@ -19,6 +19,7 @@ from database import (
     get_active_users_count,
     get_all_user_ids,
     get_all_users,
+    get_group_signups,
     get_open_questions,
     get_question,
     get_recent_users,
@@ -37,9 +38,16 @@ from keyboards import (
     cancel_kb,
     dm_confirm_kb,
     dm_recipients_kb,
+    group_broadcast_confirm_kb,
     reply_kb,
 )
-from states import AnswerStates, BroadcastStates, DirectMessageStates
+from states import (
+    AnswerStates,
+    BroadcastStates,
+    DirectMessageStates,
+    GroupBroadcastStates,
+)
+from trainings_catalog import format_group_when_short, get_group
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -252,6 +260,111 @@ async def dm_send(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
 
     await callback.message.edit_text(f"✅ Сообщение отправлено пользователю <b>{label}</b>.")
     await callback.message.answer("Готов к следующему действию.", reply_markup=admin_keyboard())
+    await callback.answer()
+
+
+# Broadcast to a single training group (participants signed up for a specific date)
+
+def _group_recipient_ids(signups: list[dict]) -> list[int]:
+    """Уникальные user_id реальных участников (без тест-записей админов)."""
+    seen: set[int] = set()
+    ids: list[int] = []
+    for s in signups:
+        if s.get("is_admin"):
+            continue
+        uid = s["user_id"]
+        if uid not in seen:
+            seen.add(uid)
+            ids.append(uid)
+    return ids
+
+
+@router.callback_query(F.data.startswith("grpcast_") & ~F.data.in_({"grpcast_confirm"}))
+async def group_broadcast_start(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    group_id = callback.data.removeprefix("grpcast_")
+    pair = get_group(group_id)
+    if pair:
+        training, group = pair
+        label = f"{group.title} · {format_group_when_short(group)}"
+    else:
+        label = f"группа «{group_id}» (снята с публикации)"
+
+    signups = await get_group_signups(group_id, include_admin=False)
+    recipients = _group_recipient_ids(signups)
+    if not recipients:
+        await callback.answer(
+            "В этой группе пока нет участников для рассылки.", show_alert=True
+        )
+        return
+
+    await state.set_state(GroupBroadcastStates.waiting_for_content)
+    await state.update_data(
+        group_id=group_id,
+        group_label=label,
+        recipient_ids=recipients,
+    )
+    await callback.message.answer(
+        f"✉️ Рассылка участникам группы:\n<b>{label}</b>\n"
+        f"Получателей: <b>{len(recipients)}</b>\n\n"
+        f"{texts.BROADCAST_START}",
+        reply_markup=cancel_kb(),
+    )
+    await callback.answer()
+
+
+@router.message(GroupBroadcastStates.waiting_for_content)
+async def group_broadcast_preview(message: Message, state: FSMContext) -> None:
+    if not (message.text or message.caption or message.photo or message.video or message.document):
+        await message.answer(texts.DM_UNSUPPORTED_CONTENT)
+        return
+
+    raw_text = message.html_text or message.caption
+    clean_text = _strip_custom_emoji(raw_text) if raw_text else None
+    await state.update_data(
+        text=clean_text,
+        photo_id=message.photo[-1].file_id if message.photo else None,
+        video_id=message.video.file_id if message.video else None,
+        document_id=message.document.file_id if message.document else None,
+    )
+
+    data = await state.get_data()
+    count = len(data.get("recipient_ids", []))
+    await state.set_state(GroupBroadcastStates.confirm)
+    await message.answer(
+        f"👆 Отправить это сообщение <b>{count}</b> участникам группы "
+        f"<b>{data['group_label']}</b>?",
+        reply_markup=group_broadcast_confirm_kb(),
+    )
+
+
+@router.callback_query(F.data == "grpcast_confirm", GroupBroadcastStates.confirm)
+async def group_broadcast_execute(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    await state.clear()
+    label = data["group_label"]
+    recipient_ids = data.get("recipient_ids", [])
+    await callback.message.edit_text(texts.BROADCAST_RUNNING)
+
+    success = failed = 0
+    for uid in recipient_ids:
+        try:
+            await _send_message_payload(bot, uid, data)
+            success += 1
+        except Exception as exc:
+            failed += 1
+            logger.warning("Group broadcast delivery failed for %s: %s", uid, exc)
+        await asyncio.sleep(BROADCAST_DELAY)
+
+    await callback.message.answer(
+        f"✅ Рассылка группе <b>{label}</b> завершена!\n\n"
+        f"• Доставлено: <b>{success}</b>\n"
+        f"• Не доставлено: <b>{failed}</b>",
+        reply_markup=admin_keyboard(),
+    )
     await callback.answer()
 
 

@@ -6,7 +6,13 @@ from datetime import datetime
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
-from aiogram.types import BufferedInputFile, CallbackQuery, Message
+from aiogram.types import (
+    BufferedInputFile,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 import texts
 from config import ADMIN_IDS
@@ -430,6 +436,15 @@ async def admin_show_group_signups(callback: CallbackQuery) -> None:
     real = [s for s in signups if not s["is_admin"]]
     test = [s for s in signups if s["is_admin"]]
 
+    write_kb = InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text="✉️ Написать всем участникам",
+                callback_data=f"grpcast_{group_id}",
+            )
+        ]]
+    )
+
     if not signups:
         await callback.message.answer(f"<b>{title}</b>\n\nЗаписей пока нет.")
         await callback.answer()
@@ -458,6 +473,7 @@ async def admin_show_group_signups(callback: CallbackQuery) -> None:
     await callback.message.answer(
         "\n".join(lines),
         disable_web_page_preview=True,
+        reply_markup=write_kb if real else None,
     )
     await callback.answer()
 
