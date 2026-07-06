@@ -8,7 +8,14 @@ from aiogram.types import CallbackQuery, Message
 import texts
 from config import ADMIN_IDS
 from database import create_question, get_user_questions, is_user_authorized
-from keyboards import BTN_ASK, BTN_MY_QUESTIONS, anonymity_kb, reply_kb, user_keyboard
+from keyboards import (
+    BTN_ASK,
+    BTN_MATERIALS,
+    BTN_MY_QUESTIONS,
+    anonymity_kb,
+    reply_kb,
+    user_keyboard,
+)
 from states import AskStates
 
 logger = logging.getLogger(__name__)
@@ -87,6 +94,19 @@ async def ask_save(message: Message, state: FSMContext, bot: Bot) -> None:
             await bot.send_message(admin_id, notify_text, reply_markup=reply_kb(question_id))
         except Exception as exc:
             logger.warning("Failed to notify admin %s: %s", admin_id, exc)
+
+
+@router.message(F.text == BTN_MATERIALS)
+async def materials(message: Message) -> None:
+    if not await is_user_authorized(message.from_user.id):
+        await message.answer(texts.AUTH_REQUIRED)
+        return
+
+    await message.answer(
+        texts.MATERIALS,
+        reply_markup=user_keyboard(),
+        disable_web_page_preview=True,
+    )
 
 
 @router.message(F.text == BTN_MY_QUESTIONS)

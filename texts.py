@@ -85,6 +85,25 @@ NO_QUESTIONS = (
 
 NO_OPEN_QUESTIONS = "🎉 Нет неотвеченных вопросов!"
 
+MATERIALS = (
+    "📚 <b>Материалы</b>\n\n"
+    "🎥 <b>Видео прошедших лекций:</b>\n"
+    "1. Вводная встреча: https://yadi.sk/d/q7W8TqC5I3WS7Q\n"
+    "2. Почему важно заботиться о ментальном здоровье: "
+    "https://yadi.sk/d/jH5MjWYEOVuI0g\n"
+    "3. Стресс: как помочь себе и сохранить устойчивость в сложных задачах: "
+    "https://yadi.sk/d/WYpwvIjdDzwi6Q\n"
+    "4. Профилактика профессионального выгорания: "
+    "https://yadi.sk/d/n3LI1TPFRFFN5w\n"
+    "5. Ассертивная коммуникация: https://disk.360.yandex.ru/i/B2I0McNWLJC_7g\n\n"
+    "🧠 <b>Видео майндбрейков:</b>\n"
+    "1. Первая встреча: https://yadi.sk/d/oJE0S402BbOynA\n"
+    "2. Вторая встреча: https://disk.yandex.ru/d/053Hy5oB6en8eQ\n\n"
+    "📊 <b>Презентации прошедших лекций:</b> "
+    "https://disk.360.yandex.ru/d/QJJbbjAG7OCxsw\n\n"
+    "⚠️ <b>Обратите внимание</b> — доступ возможен только с рабочей почты."
+)
+
 ANSWER_DELIVERY_FAILED = (
     "⚠️ Не удалось доставить ответ пользователю (возможно, он заблокировал бота)."
 )

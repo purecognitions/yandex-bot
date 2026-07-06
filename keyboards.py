@@ -11,6 +11,7 @@ BTN_ASK = "✉️ Задать вопрос специалисту"
 BTN_MY_QUESTIONS = "📋 Мои вопросы"
 BTN_TRAININGS = "🎓 Тренинги"
 BTN_MY_SIGNUPS = "📅 Мои записи"
+BTN_MATERIALS = "📚 Материалы"
 BTN_BROADCAST = "📢 Рассылка"
 BTN_DM = "✉️ Написать пользователю"
 BTN_INBOX = "📨 Входящие вопросы"
@@ -25,7 +26,7 @@ def user_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=BTN_ASK)],
             [KeyboardButton(text=BTN_TRAININGS), KeyboardButton(text=BTN_MY_SIGNUPS)],
-            [KeyboardButton(text=BTN_MY_QUESTIONS)],
+            [KeyboardButton(text=BTN_MY_QUESTIONS), KeyboardButton(text=BTN_MATERIALS)],
         ],
         resize_keyboard=True,
     )
