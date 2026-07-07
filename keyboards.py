@@ -39,6 +39,7 @@ def admin_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text=BTN_INBOX), KeyboardButton(text=BTN_ADMIN_SIGNUPS)],
             [KeyboardButton(text=BTN_STATS)],
             [KeyboardButton(text=BTN_EXPORT), KeyboardButton(text=BTN_EXPORT_SIGNUPS)],
+            [KeyboardButton(text=BTN_MATERIALS)],
         ],
         resize_keyboard=True,
     )

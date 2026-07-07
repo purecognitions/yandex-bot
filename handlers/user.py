@@ -13,6 +13,7 @@ from keyboards import (
     BTN_MATERIALS,
     BTN_MY_QUESTIONS,
     anonymity_kb,
+    keyboard_for,
     reply_kb,
     user_keyboard,
 )
@@ -104,7 +105,7 @@ async def materials(message: Message) -> None:
 
     await message.answer(
         texts.MATERIALS,
-        reply_markup=user_keyboard(),
+        reply_markup=keyboard_for(message.from_user.id),
         disable_web_page_preview=True,
     )
 
